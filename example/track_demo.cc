@@ -138,6 +138,7 @@ int main(int argc, char *argv[])
     bool initialized = false;
     float board_width = 0.0f;
     float board_height = 0.0f;
+    vector<Vec2f> target_loc;
 
     while (true) {
         cap >> frame;
@@ -151,9 +152,10 @@ int main(int argc, char *argv[])
         };
 
         zarray_t *detections = apriltag_detector_detect(td, &im);
-        cout << zarray_size(detections) << " tags detected" << endl;
-        if ( false && zarray_size(detections) > 0) {
-            cv::Mat H(3,3,CV_32F);
+        auto num_detect = zarray_size(detections);
+        cout << num_detect << " tags detected" << endl;
+        if ( target_loc.size() == 16 && num_detect > 0 && num_detect < 4) {
+            /*cv::Mat H(3,3,CV_32F);
             undist = frame.clone();
             apriltag_detection_t *det;
             zarray_get(detections, 0, &det);
@@ -170,10 +172,32 @@ int main(int argc, char *argv[])
             auto angl = RQDecomp3x3(H,R,Q);
             cout << angl << endl;
                         cameraPoseFromHomography(H,angl2);
-            cout << angl2 <<endl;
+            cout << angl2 <<endl;*/
+
+            cv::Mat out_image(480,640,CV_8UC3);
+            std::vector<Vec2f> target_pts,src_pts;
+            for (int i = 0; i < num_detect; i++) {
+                apriltag_detection_t *det;
+                zarray_get(detections, i, &det);
+                auto id = det->id;
+                for(int j=0; j < 4; j++) {
+                    src_pts.emplace_back(det->p[j][0],det->p[j][1]);
+                    target_pts.push_back(target_loc[4*id+j]);
+                }
+            }
+            cout << src_pts.size() << '\t' << target_pts.size() << endl;
+            //for(int i=0; i < num_detect*4; i++)
+            //    cout << src_pts[i] << endl << target_pts[i] << endl;
+            Mat sMat,tMat;
+            Mat(src_pts).convertTo(sMat, CV_32FC2);
+            Mat(target_pts).convertTo(tMat, CV_32FC2);
+            auto T = findHomography(sMat,tMat);
+            warpPerspective(frame,out_image,T,out_image.size());
+            imshow("hah",out_image);
         }
         if(true && zarray_size(detections) == 4) {
             cv::Mat out_image(480,640,CV_8UC3);
+
             std::vector<Vec2f> src_pts;
             cv::Mat H(3,3,CV_32F);
 
@@ -201,12 +225,25 @@ int main(int argc, char *argv[])
             cameraPoseFromHomography(T,angl2);
             //cout << angl2 <<endl;
             cout << T <<endl;
-
+            Mat invT;
+            invert(T,invT);
+            vector<Vec2f> corner_p;
+            for(int i=0; i < 4; i++) {
+                apriltag_detection_t *det;
+                zarray_get(detections, i, &det);
+                for(int j=0; j < 4; j++) {
+                    corner_p.emplace_back(det->p[j][0],det->p[j][1]);
+                }
+            }
+            auto out_p = corner_p;
+            perspectiveTransform(corner_p,out_p,T);
+            for(auto & p : out_p)
+                cout << p << endl;
+            target_loc = out_p;
             warpPerspective(frame,out_image,T,out_image.size());
             imshow("hah",out_image);
 
         }
-
         // Draw detection outlines
         for (int i = 0; i < zarray_size(detections); i++) {
             apriltag_detection_t *det;
@@ -239,7 +276,7 @@ int main(int argc, char *argv[])
         zarray_destroy(detections);
 
         imshow("Tag Detections", frame);
-        if (waitKey(30) >= 0)
+        if (waitKey(1) == 'q')
             break;
     }
 

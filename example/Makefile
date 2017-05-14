@@ -3,7 +3,7 @@ CXX = g++
 
 CPPFLAGS = -I../src
 CFLAGS = -g -std=gnu99 -Wall -Wno-unused-parameter -Wno-unused-function -O4
-CXXFLAGS = -g -Wall -O4 -std=c++14
+CXXFLAGS = -g -Wall -O0 -std=c++14
 LDFLAGS = -lpthread -lm
 
 TARGETS := apriltag_demo opencv_demo
