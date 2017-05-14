@@ -1,7 +1,7 @@
 CC = gcc
 CXX = g++
 
-CPPFLAGS = -I..
+CPPFLAGS = -I../src
 CFLAGS = -g -std=gnu99 -Wall -Wno-unused-parameter -Wno-unused-function -O4
 CXXFLAGS = -g -Wall -O4
 LDFLAGS = -lpthread -lm
@@ -9,13 +9,15 @@ LDFLAGS = -lpthread -lm
 TARGETS := apriltag_demo opencv_demo
 
 .PHONY: all
-all: apriltag_demo
+all: ../bin/apriltag_demo ../bin/opencv_demo
 
-apriltag_demo: apriltag_demo.o ../libapriltag.a
+../bin/apriltag_demo: apriltag_demo.o ../lib/libapriltag.a
+	@mkdir -p ../bin
 	@echo "   [$@]"
 	@$(CC) -o $@ $^ $(LDFLAGS)
 
-opencv_demo: opencv_demo.o ../libapriltag.a
+../bin/opencv_demo: opencv_demo.o ../lib/libapriltag.a
+	@mkdir -p ../bin
 	@echo "   [$@]"
 	@$(CXX) -o $@ $^ $(LDFLAGS) `pkg-config --libs opencv`
 
