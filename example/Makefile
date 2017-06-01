@@ -1,10 +1,10 @@
 CC = gcc
 CXX = g++
 
-CPPFLAGS = -I../src
-CFLAGS = -g -std=gnu99 -Wall -Wno-unused-parameter -Wno-unused-function -O4
-CXXFLAGS = -g -Wall -O0 -std=c++14
-LDFLAGS = -lpthread -lm
+CPPFLAGS = -I../src `pkg-config --cflags hiredis`
+CFLAGS = -g -std=gnu99 -Wall -Wno-unused-parameter -Wno-unused-function -O3
+CXXFLAGS = -g -Wall -O3 -std=c++14 -march=native
+LDFLAGS = -lpthread -lm `pkg-config --libs hiredis`
 
 TARGETS := apriltag_demo opencv_demo
 

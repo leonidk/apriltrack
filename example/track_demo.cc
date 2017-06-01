@@ -31,6 +31,7 @@ either expressed or implied, of the Regents of The University of Michigan.
 */
 
 #include <iostream>
+#include <hiredis.h>
 
 #include "opencv2/opencv.hpp"
 
@@ -75,6 +76,24 @@ void cameraPoseFromHomography(const Mat& H, Mat& pose)
 
 int main(int argc, char *argv[])
 {
+
+    redisContext *c;
+    redisReply *reply;
+    const char *hostname =  "127.0.0.1";
+    int port = 6379;
+
+    struct timeval timeout = { 1, 500000 }; // 1.5 seconds
+    c = redisConnectWithTimeout(hostname, port, timeout);
+    if (c == NULL || c->err) {
+        if (c) {
+            printf("Connection error: %s\n", c->errstr);
+            redisFree(c);
+        } else {
+            printf("Connection error: can't allocate redis context\n");
+        }
+        exit(1);
+    }
+
     getopt_t *getopt = getopt_create();
 
     getopt_add_bool(getopt, 'h', "help", 0, "Show this help");
@@ -82,6 +101,9 @@ int main(int argc, char *argv[])
     getopt_add_bool(getopt, 'q', "quiet", 0, "Reduce output");
     getopt_add_string(getopt, 'f', "family", "tag36h11", "Tag family to use");
     getopt_add_int(getopt, '\0', "border", "1", "Set tag family border size");
+    getopt_add_int(getopt, '\0', "th", "500", "Set target image height");
+    getopt_add_int(getopt, '\0', "tw", "500", "Set target image width");
+
     getopt_add_int(getopt, 't', "threads", "4", "Use this many CPU threads");
     getopt_add_double(getopt, 'x', "decimate", "1.0", "Decimate input image by this factor");
     getopt_add_double(getopt, 'b', "blur", "0.0", "Apply low-pass blur to input");
@@ -127,6 +149,7 @@ int main(int argc, char *argv[])
     td->quad_decimate = getopt_get_double(getopt, "decimate");
     td->quad_sigma = getopt_get_double(getopt, "blur");
     td->nthreads = getopt_get_int(getopt, "threads");
+
     td->debug = getopt_get_bool(getopt, "debug");
     td->refine_edges = getopt_get_bool(getopt, "refine-edges");
     td->refine_decode = getopt_get_bool(getopt, "refine-decode");
@@ -139,8 +162,13 @@ int main(int argc, char *argv[])
     float board_width = 0.0f;
     float board_height = 0.0f;
     vector<Vec2f> target_loc;
+    auto th = getopt_get_int(getopt,"th");
+    auto tw = getopt_get_int(getopt,"tw");
+    cv::Mat out_image(th,tw,CV_8UC3);
+    BackgroundSubtractorMOG2 bgs(360,36,false);
 
     while (true) {
+        bool new_detection = false;
         cap >> frame;
         cvtColor(frame, gray, COLOR_BGR2GRAY);
 
@@ -153,28 +181,10 @@ int main(int argc, char *argv[])
 
         zarray_t *detections = apriltag_detector_detect(td, &im);
         auto num_detect = zarray_size(detections);
-        cout << num_detect << " tags detected" << endl;
+        //cout << num_detect << " tags detected" << endl;
+
         if ( target_loc.size() == 16 && num_detect > 0 && num_detect < 4) {
-            /*cv::Mat H(3,3,CV_32F);
-            undist = frame.clone();
-            apriltag_detection_t *det;
-            zarray_get(detections, 0, &det);
-            for(int j=0; j < 9; j++)
-                H.at<float>(j) = det->H->data[j];
-            cout << H << endl;
-                        Mat R,Q,angl2;
 
-            auto pose = homography_to_pose(det->H,1,1,0.5,0.5);
-            cv::Mat P(4,4,CV_32F);
-            for(int j=0; j < 16; j++)
-                P.at<float>(j) = pose->data[j];
-            //cout << P << endl;
-            auto angl = RQDecomp3x3(H,R,Q);
-            cout << angl << endl;
-                        cameraPoseFromHomography(H,angl2);
-            cout << angl2 <<endl;*/
-
-            cv::Mat out_image(480,640,CV_8UC3);
             std::vector<Vec2f> target_pts,src_pts;
             for (int i = 0; i < num_detect; i++) {
                 apriltag_detection_t *det;
@@ -185,7 +195,7 @@ int main(int argc, char *argv[])
                     target_pts.push_back(target_loc[4*id+j]);
                 }
             }
-            cout << src_pts.size() << '\t' << target_pts.size() << endl;
+            //cout << src_pts.size() << '\t' << target_pts.size() << endl;
             //for(int i=0; i < num_detect*4; i++)
             //    cout << src_pts[i] << endl << target_pts[i] << endl;
             Mat sMat,tMat;
@@ -193,10 +203,9 @@ int main(int argc, char *argv[])
             Mat(target_pts).convertTo(tMat, CV_32FC2);
             auto T = findHomography(sMat,tMat);
             warpPerspective(frame,out_image,T,out_image.size());
-            imshow("hah",out_image);
+            new_detection = true;
         }
         if(true && zarray_size(detections) == 4) {
-            cv::Mat out_image(480,640,CV_8UC3);
 
             std::vector<Vec2f> src_pts;
             cv::Mat H(3,3,CV_32F);
@@ -204,19 +213,19 @@ int main(int argc, char *argv[])
             for (int i = 0; i < zarray_size(detections); i++) {
                 apriltag_detection_t *det;
                 zarray_get(detections, i, &det);
-                cout << det->id << '\t' << det->c[0] << '\t' << det->c[1] << '\t';
+                //cout << det->id << '\t' << det->c[0] << '\t' << det->c[1] << '\t';
                 for(int j=0; j < 9; j++) {
                     H.at<float>(j) = det->H->data[j];
                     //cout << det->H->data[j] << ", ";
                 }
                 H /= H.at<float>(8);
-                cout <<endl << H << endl;
+                //cout <<endl << H << endl;
                 //cout << endl;
                 src_pts.emplace_back(det->c[0],det->c[1]);
 
             }
             Mat R,Q,Qx,Qy,Qz;
-            std::vector<Vec2f> target_pts = {{0,0}, {640,0}, {0,480}, {640,480}};
+            std::vector<Vec2f> target_pts = {{0,0}, {tw,0}, {0,th}, {tw,th}};
             auto T = getPerspectiveTransform(src_pts,target_pts);
             auto angl = RQDecomp3x3(T,R,Q,Qx,Qy,Qz);
             //cout << angl << endl;
@@ -224,7 +233,7 @@ int main(int argc, char *argv[])
             Mat angl2;
             cameraPoseFromHomography(T,angl2);
             //cout << angl2 <<endl;
-            cout << T <<endl;
+            //cout << T <<endl;
             Mat invT;
             invert(T,invT);
             vector<Vec2f> corner_p;
@@ -237,11 +246,37 @@ int main(int argc, char *argv[])
             }
             auto out_p = corner_p;
             perspectiveTransform(corner_p,out_p,T);
-            for(auto & p : out_p)
-                cout << p << endl;
+            //for(auto & p : out_p)
+            //    cout << p << endl;
             target_loc = out_p;
             warpPerspective(frame,out_image,T,out_image.size());
+            new_detection = true;
+
+        }
+
+        redisCommand(c,"SET %s %s", "maze::detections", to_string(num_detect).c_str());
+
+        if(num_detect) {
+            cv::Mat fg_mask;
+            bgs(out_image,fg_mask);
+            Moments m = moments(fg_mask, false);
+            Point2f p1(m.m10/m.m00, m.m01/m.m00);
+            Point2f var(sqrt(m.m20/m.m00 - p1.x*p1.x), sqrt(m.m02/m.m00-p1.y*p1.y));
+
             imshow("hah",out_image);
+            cv::circle(fg_mask,p1,10,128,3);
+            imshow("hah2",fg_mask);
+            var.x /= tw;
+            var.y /= th;
+            p1.x /= tw;
+            p1.y /= th;
+            redisCommand(c,"SET %s %s", "maze::x", to_string(p1.x).c_str());
+            redisCommand(c,"SET %s %s", "maze::y", to_string(p1.y).c_str());
+            redisCommand(c,"SET %s %s", "maze::stdx", to_string(var.x).c_str());
+            redisCommand(c,"SET %s %s", "maze::stdy", to_string(var.y).c_str());
+
+            cout <<  p1 <<"\t" <<  var << endl;
+
 
         }
         // Draw detection outlines
