@@ -103,6 +103,8 @@ int main(int argc, char *argv[])
     getopt_add_int(getopt, '\0', "border", "1", "Set tag family border size");
     getopt_add_int(getopt, '\0', "th", "500", "Set target image height");
     getopt_add_int(getopt, '\0', "tw", "500", "Set target image width");
+    getopt_add_int(getopt, '\0', "ct", "180", "set color threshold");
+    getopt_add_int(getopt, '\0', "bd", "35", "set maze border");
 
     getopt_add_int(getopt, 't', "threads", "4", "Use this many CPU threads");
     getopt_add_double(getopt, 'x', "decimate", "1.0", "Decimate input image by this factor");
@@ -119,7 +121,7 @@ int main(int argc, char *argv[])
     }
 
     // Initialize camera
-    VideoCapture cap(0);
+    VideoCapture cap(1);
     if (!cap.isOpened()) {
         cerr << "Couldn't open video capture device" << endl;
         return -1;
@@ -163,7 +165,10 @@ int main(int argc, char *argv[])
     float board_height = 0.0f;
     vector<Vec2f> target_loc;
     auto th = getopt_get_int(getopt,"th");
-    auto tw = getopt_get_int(getopt,"tw");
+    auto tw = getopt_get_int(getopt,"tw");    
+    auto ct = getopt_get_int(getopt,"ct");
+    auto bd = getopt_get_int(getopt,"bd");
+
     cv::Mat out_image(th,tw,CV_8UC3);
     BackgroundSubtractorMOG2 bgs(360,36,false);
 
@@ -257,8 +262,25 @@ int main(int argc, char *argv[])
         redisCommand(c,"SET %s %s", "maze::detections", to_string(num_detect).c_str());
 
         if(num_detect) {
-            cv::Mat fg_mask;
-            bgs(out_image,fg_mask);
+            cv::Mat fg_mask = cv::Mat::zeros(th,tw,CV_8U);
+            for(int y=bd; y < th-bd; y++) {
+            	for(int x=bd; x < tw-bd; x++) {
+            		auto total_color = 0;
+            		for(int c=0; c < 3; c++) {
+            			total_color+= out_image.at<Vec3b>(y,x)[c];
+            		}
+            		if(total_color < ct) {
+            			fg_mask.at<uint8_t>(y,x) = 255;
+            		}
+            	}
+            }
+            auto morph_size = 1;
+			Mat element = getStructuringElement( 0, Size( 2*morph_size + 1, 2*morph_size+1 ), Point( morph_size, morph_size ) );
+
+  		/// Apply the specified morphology operation
+  			morphologyEx( fg_mask, fg_mask, MORPH_OPEN, element );
+
+            //bgs(out_image,fg_mask);
             Moments m = moments(fg_mask, false);
             Point2f p1(m.m10/m.m00, m.m01/m.m00);
             Point2f var(sqrt(m.m20/m.m00 - p1.x*p1.x), sqrt(m.m02/m.m00-p1.y*p1.y));
@@ -274,7 +296,7 @@ int main(int argc, char *argv[])
             redisCommand(c,"SET %s %s", "maze::y", to_string(p1.y).c_str());
             redisCommand(c,"SET %s %s", "maze::stdx", to_string(var.x).c_str());
             redisCommand(c,"SET %s %s", "maze::stdy", to_string(var.y).c_str());
-
+            //
             cout <<  p1 <<"\t" <<  var << endl;
 
 
