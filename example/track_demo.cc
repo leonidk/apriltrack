@@ -43,10 +43,163 @@ either expressed or implied, of the Regents of The University of Michigan.
 #include "tag25h9.h"
 #include "tag25h7.h"
 #include "common/getopt.h"
-
+#include <queue>
+#include <tuple>
 using namespace std;
 using namespace cv;
 
+cv::Mat solveMaze(cv::Mat input) 
+{
+    cv::Mat solution = cv::Mat::zeros(input.rows,input.cols,CV_8U);
+    cv::Mat paths = cv::Mat::zeros(input.rows,input.cols,CV_32FC3);
+
+    cv::Mat maze = input.clone();
+    auto w = maze.cols;
+    auto h = maze.rows;
+    auto bd = 35;
+    // segment
+    for(int y=0; y < h; y++) {
+        for(int x=0; x < w; x++) {
+            auto total_c = 0;
+            if(input.at<Vec3b>(y,x)[2] > input.at<Vec3b>(y,x)[1]
+                && input.at<Vec3b>(y,x)[2] > input.at<Vec3b>(y,x)[0])
+                maze.at<Vec3b>(y,x) = Vec3b(0,0,255);
+            else if( input.at<Vec3b>(y,x)[1] > 40+ input.at<Vec3b>(y,x)[0])
+                maze.at<Vec3b>(y,x) = Vec3b(0,255,0);
+            else
+                maze.at<Vec3b>(y,x) = Vec3b(255,0,0);
+        }
+    }
+    // border
+    for(int y=0; y < bd; y++ )
+        for(int x=0; x < w; x++)
+                maze.at<Vec3b>(y,x) = Vec3b(255,0,0);
+    for(int y=h-bd; y < h; y++ )
+        for(int x=0; x < w; x++)
+                maze.at<Vec3b>(y,x) = Vec3b(255,0,0);
+    for(int y=0; y < h; y++ )
+        for(int x=0; x < bd; x++)
+                maze.at<Vec3b>(y,x) = Vec3b(255,0,0);
+    for(int y=0; y < h; y++ )
+        for(int x=w-bd; x < w; x++)
+                maze.at<Vec3b>(y,x) = Vec3b(255,0,0);
+    // bfs
+    std::queue<std::tuple<int,int,int>> q;
+    cv::Mat visited = cv::Mat::zeros(input.rows,input.cols,CV_8U);
+
+    for(int y=0; y < h; y++) {
+        for(int x=0; x < w; x++) {
+            if( maze.at<Vec3b>(y,x) == Vec3b(0,255,0)) {
+                q.emplace(y,x,0);
+                visited.data[y*w+x] = 1;
+            }
+            if(maze.at<Vec3b>(y,x) == Vec3b(255,0,0))
+                visited.data[y*w+x] = 1;
+        }
+    }
+    auto down = 1;
+    auto up = 2;
+    auto left = 3;
+    auto right = 4;
+    cout << q.size() << endl;
+    while(!q.empty()) {
+        auto top = q.front();
+        q.pop();
+        auto y = std::get<0>(top);
+        auto x = std::get<1>(top);
+        auto p = std::get<2>(top);
+
+        if(y+1 < h && !visited.at<uint8_t>(y+1,x)) {
+            q.emplace(y+1,x,down);
+            visited.at<uint8_t>(y+1,x) = 1;
+        }
+        if(x+1 < w && !visited.at<uint8_t>(y,x+1)) {
+            q.emplace(y,x+1,right);
+            visited.at<uint8_t>(y,x+1) = 1;
+        }
+        if(y-1 >= 0 && !visited.at<uint8_t>(y-1,x)) {
+            q.emplace(y-1,x,up);
+            visited.at<uint8_t>(y-1,x) = 1;
+        }
+        if(x-1 >= 0 && !visited.at<uint8_t>(y,x-1)) {
+            q.emplace(y,x-1,left);
+            visited.at<uint8_t>(y,x-1) = 1;
+        }
+        solution.at<uint8_t>(y,x) = p;
+        visited.at<uint8_t>(y,x) = 1;
+
+    }
+    visited = cv::Mat::zeros(input.rows,input.cols,CV_8U);
+    for(int y=0; y < h; y++) {
+        for(int x=0; x < w; x++) {
+            if(maze.at<Vec3b>(y,x) == Vec3b(255,0,0))
+                visited.data[y*w+x] = 1;
+        }
+    }
+    for(int y=0; y < h; y++) {
+        for(int x=0; x < w; x++) {
+            if(!visited.data[y*w+x]) {
+                std::queue<std::pair<int,int>> q2;
+                q2.push({y,x});
+                auto val = solution.at<uint8_t>(y,x);
+                auto final = make_pair(y,x);
+
+                while(true) {
+                    auto v = q2.back();
+                    auto yn = v.first;
+                    auto xn = v.second;
+                    auto end = true;
+                    auto new_pos = make_pair(y,x);
+                    switch(solution.at<uint8_t>(yn,xn)) {
+                        case 0:
+                            break;
+                        case 1:
+                            end = false;
+                            new_pos = make_pair(yn-1,xn);
+                            break;
+                        case 2:
+                            end = false;
+                            new_pos = make_pair(yn+1,xn);
+                            break;
+                        case 3:
+                            end = false;
+                            new_pos = make_pair(yn,xn+1);
+                            break;  
+                        case 4:
+                            end = false;
+                            new_pos = make_pair(yn,xn-1);
+                            break;
+                    }
+                    if(end) {
+                        final = new_pos;
+                        break;
+                    }
+                    if(solution.at<uint8_t>(new_pos.first,new_pos.second) != val) {
+                        final = new_pos;
+                        break;
+                    }
+                    q2.push(new_pos);
+                }
+                while(!q2.empty()) {
+                    auto np = q2.front();
+                    q2.pop();
+                    auto yn = np.first;
+                    auto xn = np.second;
+                    visited.at<uint8_t>(yn,xn) = 1;
+                    paths.at<Vec3f>(yn,xn) = Vec3f(1,final.first/((float)h),final.second/((float)w));
+                }
+
+            }
+        }
+    }
+    imshow("sol",solution*(255.0/4.0));
+    imshow("visited",visited*255);
+    imshow("paths",paths);
+
+    imshow("haha",maze);
+    waitKey();
+    return paths;
+}
 void cameraPoseFromHomography(const Mat& H, Mat& pose)
 {
     pose = Mat::eye(3, 4, CV_32FC1);      // 3x4 matrix, the camera pose
@@ -76,7 +229,6 @@ void cameraPoseFromHomography(const Mat& H, Mat& pose)
 
 int main(int argc, char *argv[])
 {
-
     redisContext *c;
     redisReply *reply;
     const char *hostname =  "127.0.0.1";
@@ -103,7 +255,7 @@ int main(int argc, char *argv[])
     getopt_add_int(getopt, '\0', "border", "1", "Set tag family border size");
     getopt_add_int(getopt, '\0', "th", "500", "Set target image height");
     getopt_add_int(getopt, '\0', "tw", "500", "Set target image width");
-    getopt_add_int(getopt, '\0', "ct", "180", "set color threshold");
+    getopt_add_int(getopt, '\0', "ct", "200", "set color threshold");
     getopt_add_int(getopt, '\0', "bd", "35", "set maze border");
 
     getopt_add_int(getopt, 't', "threads", "4", "Use this many CPU threads");
@@ -171,7 +323,7 @@ int main(int argc, char *argv[])
 
     cv::Mat out_image(th,tw,CV_8UC3);
     BackgroundSubtractorMOG2 bgs(360,36,false);
-
+    cv::Mat target;
     while (true) {
         bool new_detection = false;
         cap >> frame;
@@ -292,13 +444,23 @@ int main(int argc, char *argv[])
             var.y /= th;
             p1.x /= tw;
             p1.y /= th;
-            redisCommand(c,"SET %s %s", "maze::x", to_string(p1.x).c_str());
-            redisCommand(c,"SET %s %s", "maze::y", to_string(p1.y).c_str());
-            redisCommand(c,"SET %s %s", "maze::stdx", to_string(var.x).c_str());
-            redisCommand(c,"SET %s %s", "maze::stdy", to_string(var.y).c_str());
-            //
-            cout <<  p1 <<"\t" <<  var << endl;
+            if(m.m00) {
+                redisCommand(c,"SET %s %s", "maze::mass", to_string(m.m00).c_str());
+                redisCommand(c,"SET %s %s", "maze::x", to_string(p1.x).c_str());
+                redisCommand(c,"SET %s %s", "maze::y", to_string(p1.y).c_str());
+                redisCommand(c,"SET %s %s", "maze::stdx", to_string(var.x).c_str());
+                redisCommand(c,"SET %s %s", "maze::stdy", to_string(var.y).c_str());
+                //
+                cout <<  p1 <<"\t" <<  var << endl;
+                if(target.cols) {
+                    Point2f p2(m.m10/m.m00, m.m01/m.m00);
 
+                    auto tp = target.at<Vec3f>(p2.y,p2.x);
+                    cout << tp << endl;
+                    redisCommand(c,"SET %s %s", "maze::tx", to_string(tp[2]).c_str());
+                    redisCommand(c,"SET %s %s", "maze::ty", to_string(tp[1]).c_str());
+                }
+            }
 
         }
         // Draw detection outlines
@@ -333,8 +495,13 @@ int main(int argc, char *argv[])
         zarray_destroy(detections);
 
         imshow("Tag Detections", frame);
-        if (waitKey(1) == 'q')
+        char kp = waitKey(1);
+        if (kp == 'q')
             break;
+        if(kp == 's' && num_detect == 4 ) {
+            target = solveMaze(out_image);
+        }
+
     }
 
     apriltag_detector_destroy(td);
