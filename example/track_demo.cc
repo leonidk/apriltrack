@@ -104,14 +104,16 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
     const auto RIGHT = 4;
     cout << q.size() << endl;
     auto cntr = 0;
+    Vec4f counter(0,0,0,0);
     while(!q.empty()) {//sum(visited)[0] != w*h) {
         while(!q.empty()) {
             cntr++;
             auto top = q.front();
-            q.pop();
             auto y = std::get<0>(top);
             auto x = std::get<1>(top);
             auto p = std::get<2>(top);
+            q.pop();
+            counter[p-1]++;
             solution.at<uint8_t>(y,x) = p;
             visited.at<uint8_t>(y,x) = 1;
 
@@ -131,13 +133,15 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
                 q2.emplace(y,x-1,LEFT);
                 visited.at<uint8_t>(y,x-1) = 1;
             }
-            if(cntr%50000 == 0) {
+            if(cntr%10 == 0) {
                 cout << '\r' << ((w*h) - sum(visited)[0])/( (float)total_pix) << endl; 
                 imshow("visited",visited*255);
+                imshow("solution",solution*63);
                 waitKey(1);
             }
         }
         cout << q.size() << '\t' << q2.size() << endl;
+        cout << counter << endl;
         std::swap(q,q2);
 
     }
@@ -243,7 +247,9 @@ void cameraPoseFromHomography(const Mat& H, Mat& pose)
 int main(int argc, char *argv[])
 {
     cv::Mat maze = imread("out.png");
-    auto sol = solveMaze(maze);
+    cv::Mat m2;
+    resize(maze,m2,Size(200,200));
+    auto sol = solveMaze(m2,10);
     return 0;
     redisContext *c;
     redisReply *reply;
@@ -269,8 +275,8 @@ int main(int argc, char *argv[])
     getopt_add_bool(getopt, 'q', "quiet", 0, "Reduce output");
     getopt_add_string(getopt, 'f', "family", "tag36h11", "Tag family to use");
     getopt_add_int(getopt, '\0', "border", "1", "Set tag family border size");
-    getopt_add_int(getopt, '\0', "th", "200", "Set target image height");
-    getopt_add_int(getopt, '\0', "tw", "200", "Set target image width");
+    getopt_add_int(getopt, '\0', "th", "32", "Set target image height");
+    getopt_add_int(getopt, '\0', "tw", "32", "Set target image width");
     getopt_add_int(getopt, '\0', "ct", "80", "set color threshold");
     getopt_add_int(getopt, '\0', "bd", "35", "set maze border");
     getopt_add_int(getopt, '\0', "grn", "35", "green difference");
