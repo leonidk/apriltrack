@@ -84,7 +84,7 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
         for(int x=w-bd; x < w; x++)
                 maze.at<Vec3b>(y,x) = Vec3b(255,0,0);
     // bfs
-    std::queue<std::tuple<int,int,int>> q;
+    std::queue<std::tuple<int,int,int>> q,q2;
     cv::Mat visited = cv::Mat::zeros(input.rows,input.cols,CV_8U);
 
     for(int y=0; y < h; y++) {
@@ -97,36 +97,48 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
                 visited.data[y*w+x] = 1;
         }
     }
-    auto down = 1;
-    auto up = 2;
-    auto left = 3;
-    auto right = 4;
+    auto total_pix = (w*h) - sum(visited)[0]; 
+    const auto DOWN = 1;
+    const auto UP = 2;
+    const auto LEFT = 3;
+    const auto RIGHT = 4;
     cout << q.size() << endl;
-    while(!q.empty()) {
-        auto top = q.front();
-        q.pop();
-        auto y = std::get<0>(top);
-        auto x = std::get<1>(top);
-        auto p = std::get<2>(top);
+    auto cntr = 0;
+    while(!q.empty()) {//sum(visited)[0] != w*h) {
+        while(!q.empty()) {
+            cntr++;
+            auto top = q.front();
+            q.pop();
+            auto y = std::get<0>(top);
+            auto x = std::get<1>(top);
+            auto p = std::get<2>(top);
+            solution.at<uint8_t>(y,x) = p;
+            visited.at<uint8_t>(y,x) = 1;
 
-        if(y+1 < h && !visited.at<uint8_t>(y+1,x)) {
-            q.emplace(y+1,x,down);
-            visited.at<uint8_t>(y+1,x) = 1;
+            if(y+1 < h && !visited.at<uint8_t>(y+1,x)) {
+                q2.emplace(y+1,x,DOWN);
+                visited.at<uint8_t>(y+1,x) = 1;
+            }
+            if(x+1 < w && !visited.at<uint8_t>(y,x+1)) {
+                q2.emplace(y,x+1,RIGHT);
+                visited.at<uint8_t>(y,x+1) = 1;
+            }
+            if(y-1 >= 0 && !visited.at<uint8_t>(y-1,x)) {
+                q2.emplace(y-1,x,UP);
+                visited.at<uint8_t>(y-1,x) = 1;
+            }
+            if(x-1 >= 0 && !visited.at<uint8_t>(y,x-1)) {
+                q2.emplace(y,x-1,LEFT);
+                visited.at<uint8_t>(y,x-1) = 1;
+            }
+            if(cntr%50000 == 0) {
+                cout << '\r' << ((w*h) - sum(visited)[0])/( (float)total_pix) << endl; 
+                imshow("visited",visited*255);
+                waitKey(1);
+            }
         }
-        if(x+1 < w && !visited.at<uint8_t>(y,x+1)) {
-            q.emplace(y,x+1,right);
-            visited.at<uint8_t>(y,x+1) = 1;
-        }
-        if(y-1 >= 0 && !visited.at<uint8_t>(y-1,x)) {
-            q.emplace(y-1,x,up);
-            visited.at<uint8_t>(y-1,x) = 1;
-        }
-        if(x-1 >= 0 && !visited.at<uint8_t>(y,x-1)) {
-            q.emplace(y,x-1,left);
-            visited.at<uint8_t>(y,x-1) = 1;
-        }
-        solution.at<uint8_t>(y,x) = p;
-        visited.at<uint8_t>(y,x) = 1;
+        cout << q.size() << '\t' << q2.size() << endl;
+        std::swap(q,q2);
 
     }
     visited = cv::Mat::zeros(input.rows,input.cols,CV_8U);
@@ -152,20 +164,21 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
                     auto new_pos = make_pair(y,x);
                     switch(solution.at<uint8_t>(yn,xn)) {
                         case 0:
+                            //cout << "BAD" << endl;
                             break;
-                        case 1:
+                        case DOWN:
                             end = false;
                             new_pos = make_pair(yn-1,xn);
                             break;
-                        case 2:
+                        case UP:
                             end = false;
                             new_pos = make_pair(yn+1,xn);
                             break;
-                        case 3:
+                        case LEFT:
                             end = false;
                             new_pos = make_pair(yn,xn+1);
                             break;  
-                        case 4:
+                        case RIGHT:
                             end = false;
                             new_pos = make_pair(yn,xn-1);
                             break;
@@ -197,7 +210,7 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
     imshow("paths",paths);
 
     imshow("haha",maze);
-    waitKey(1);
+    waitKey(0);
     return paths;
 }
 void cameraPoseFromHomography(const Mat& H, Mat& pose)
@@ -229,6 +242,9 @@ void cameraPoseFromHomography(const Mat& H, Mat& pose)
 
 int main(int argc, char *argv[])
 {
+    cv::Mat maze = imread("out.png");
+    auto sol = solveMaze(maze);
+    return 0;
     redisContext *c;
     redisReply *reply;
     const char *hostname =  "127.0.0.1";
@@ -253,12 +269,12 @@ int main(int argc, char *argv[])
     getopt_add_bool(getopt, 'q', "quiet", 0, "Reduce output");
     getopt_add_string(getopt, 'f', "family", "tag36h11", "Tag family to use");
     getopt_add_int(getopt, '\0', "border", "1", "Set tag family border size");
-    getopt_add_int(getopt, '\0', "th", "500", "Set target image height");
-    getopt_add_int(getopt, '\0', "tw", "500", "Set target image width");
-    getopt_add_int(getopt, '\0', "ct", "200", "set color threshold");
+    getopt_add_int(getopt, '\0', "th", "200", "Set target image height");
+    getopt_add_int(getopt, '\0', "tw", "200", "Set target image width");
+    getopt_add_int(getopt, '\0', "ct", "80", "set color threshold");
     getopt_add_int(getopt, '\0', "bd", "35", "set maze border");
-    getopt_add_int(getopt, '\0', "grn", "40", "green difference");
-    getopt_add_int(getopt, '\0', "ms", "1", "morph size");
+    getopt_add_int(getopt, '\0', "grn", "35", "green difference");
+    getopt_add_int(getopt, '\0', "ms", "4", "morph size");
 
 
     getopt_add_int(getopt, 't', "threads", "4", "Use this many CPU threads");
