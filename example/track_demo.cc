@@ -59,7 +59,7 @@ bool operator<(const node& a, const node& b) {
     return a.dist > b.dist;
 }
 
-cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40, bool diag_path=false,
+cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40, int ballc = 50, bool diag_path=false,
     bool segments = true) 
 {
     cv::Mat solution = cv::Mat::zeros(input.rows,input.cols,CV_8U);
@@ -73,7 +73,9 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40, bool diag_path=false
     for(int y=0; y < h; y++) {
         for(int x=0; x < w; x++) {
             auto total_c = 0;
-            if(input.at<Vec3b>(y,x)[2] > input.at<Vec3b>(y,x)[1]
+            if( max(input.at<Vec3b>(y,x)[0],max(input.at<Vec3b>(y,x)[1],input.at<Vec3b>(y,x)[2])) < ballc) 
+                maze.at<Vec3b>(y,x) = Vec3b(0,0,255);
+            else if(input.at<Vec3b>(y,x)[2] > input.at<Vec3b>(y,x)[1]
                 && input.at<Vec3b>(y,x)[2] > input.at<Vec3b>(y,x)[0])
                 maze.at<Vec3b>(y,x) = Vec3b(0,0,255);
             else if( input.at<Vec3b>(y,x)[1] > grn + input.at<Vec3b>(y,x)[0])
@@ -300,10 +302,10 @@ int main(int argc, char *argv[])
 {
     //#define TEST_SOLVE
     #ifdef TEST_SOLVE
-        cv::Mat maze = imread("out.png");
+        cv::Mat maze = imread("out2.png");
         cv::Mat m2;
         //resize(maze,m2,Size(200,200));
-        auto sol = solveMaze(maze,35,40,true,false);//,10);
+        auto sol = solveMaze(maze,35,30,80,true,false);//,10);
         return 0;
     #endif
     redisContext *c;
@@ -334,9 +336,11 @@ int main(int argc, char *argv[])
     getopt_add_int(getopt, '\0', "tw", "500", "Set target image width");
     getopt_add_int(getopt, '\0', "ct", "80", "set color threshold");
     getopt_add_int(getopt, '\0', "bd", "35", "set maze border");
-    getopt_add_int(getopt, '\0', "grn", "35", "green difference");
+    getopt_add_int(getopt, '\0', "grn", "30", "green difference");
     getopt_add_int(getopt, '\0', "ms", "4", "morph size");
     getopt_add_int(getopt, '\0', "l2", "0", "use_l2");
+    getopt_add_int(getopt, '\0', "ballc", "80", "color of ball");
+
     getopt_add_int(getopt, '\0', "lookahead", "0", "look ahead this many steps");
     getopt_add_int(getopt, '\0', "segments", "1", "try to build segment steps");
 
@@ -405,6 +409,7 @@ int main(int argc, char *argv[])
     auto morph_size = getopt_get_int(getopt,"ms");
     auto lookahead = getopt_get_int(getopt,"lookahead");
     auto segments = getopt_get_int(getopt,"segments");
+    auto ballc = getopt_get_int(getopt,"ballc");
 
     bool l2 = getopt_get_int(getopt,"l2");
 
@@ -655,7 +660,13 @@ int main(int argc, char *argv[])
                 segments = atoi(reply->str);
             }
             freeReplyObject(reply);
-            target = solveMaze(out_image,bd,grn,l2,segments);
+            reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::ballc");
+            if(reply->type == REDIS_REPLY_STRING) {
+                printf("GET foo ballc: %s\n", reply->str);
+                ballc = atoi(reply->str);
+            }
+            freeReplyObject(reply);
+            target = solveMaze(out_image,bd,grn,ballc,l2,segments);
         }
 
     }
