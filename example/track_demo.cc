@@ -59,7 +59,8 @@ bool operator<(const node& a, const node& b) {
     return a.dist > b.dist;
 }
 
-cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40, bool diag_path=false) 
+cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40, bool diag_path=false,
+    bool segments = true) 
 {
     cv::Mat solution = cv::Mat::zeros(input.rows,input.cols,CV_8U);
     cv::Mat paths = cv::Mat::zeros(input.rows,input.cols,CV_32FC3);
@@ -242,7 +243,7 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40, bool diag_path=false
                         final = new_pos;
                         break;
                     }
-                    if(solution.at<uint8_t>(new_pos.first,new_pos.second) != val) {
+                    if(!segments || solution.at<uint8_t>(new_pos.first,new_pos.second) != val) {
                         final = new_pos;
                         break;
                     }
@@ -302,7 +303,7 @@ int main(int argc, char *argv[])
         cv::Mat maze = imread("out.png");
         cv::Mat m2;
         //resize(maze,m2,Size(200,200));
-        auto sol = solveMaze(maze,35,40,true);//,10);
+        auto sol = solveMaze(maze,35,40,true,false);//,10);
         return 0;
     #endif
     redisContext *c;
@@ -337,6 +338,7 @@ int main(int argc, char *argv[])
     getopt_add_int(getopt, '\0', "ms", "4", "morph size");
     getopt_add_int(getopt, '\0', "l2", "0", "use_l2");
     getopt_add_int(getopt, '\0', "lookahead", "0", "look ahead this many steps");
+    getopt_add_int(getopt, '\0', "segments", "1", "try to build segment steps");
 
     getopt_add_int(getopt, 't', "threads", "4", "Use this many CPU threads");
     getopt_add_double(getopt, 'x', "decimate", "1.0", "Decimate input image by this factor");
@@ -402,6 +404,7 @@ int main(int argc, char *argv[])
     auto grn = getopt_get_int(getopt,"grn");
     auto morph_size = getopt_get_int(getopt,"ms");
     auto lookahead = getopt_get_int(getopt,"lookahead");
+    auto segments = getopt_get_int(getopt,"segments");
 
     bool l2 = getopt_get_int(getopt,"l2");
 
@@ -419,12 +422,6 @@ int main(int argc, char *argv[])
     }
     freeReplyObject(reply);
 
-    reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::diag");
-    if(reply->type == REDIS_REPLY_STRING) {
-        printf("GET foo: %s\n", reply->str);
-        l2 = atoi(reply->str);
-    }
-    freeReplyObject(reply);
 
     cv::Mat out_image(th,tw,CV_8UC3);
     cv::Mat target;
@@ -646,7 +643,19 @@ int main(int argc, char *argv[])
         if (kp == 'q')
             break;
         if(kp == 's' && num_detect == 4 ) {
-            target = solveMaze(out_image,bd,grn,l2);
+            reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::diag");
+            if(reply->type == REDIS_REPLY_STRING) {
+                printf("GET foo: %s\n", reply->str);
+                l2 = atoi(reply->str);
+            }
+            freeReplyObject(reply);
+            reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::segments");
+            if(reply->type == REDIS_REPLY_STRING) {
+                printf("GET foo: %s\n", reply->str);
+                segments = atoi(reply->str);
+            }
+            freeReplyObject(reply);
+            target = solveMaze(out_image,bd,grn,l2,segments);
         }
 
     }
