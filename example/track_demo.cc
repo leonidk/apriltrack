@@ -48,6 +48,17 @@ either expressed or implied, of the Regents of The University of Michigan.
 using namespace std;
 using namespace cv;
 
+class node {
+public:
+    node(int y,int x,int p,float dist):
+    y(y),x(x),p(p),dist(dist) {}
+    int y,x,p;
+    float dist;
+};
+bool operator<(const node& a, const node& b) {
+    return a.dist > b.dist;
+}
+
 cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40) 
 {
     cv::Mat solution = cv::Mat::zeros(input.rows,input.cols,CV_8U);
@@ -87,10 +98,16 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
     std::queue<std::tuple<int,int,int>> q,q2;
     cv::Mat visited = cv::Mat::zeros(input.rows,input.cols,CV_8U);
 
+
+
+
+    priority_queue<node> q1;
+
     for(int y=0; y < h; y++) {
         for(int x=0; x < w; x++) {
             if( maze.at<Vec3b>(y,x) == Vec3b(0,255,0)) {
-                q.emplace(y,x,0);
+                //q.emplace(y,x,0);
+                q1.push(node(y,x,0,0.0f));
                 visited.data[y*w+x] = 1;
             }
             if(maze.at<Vec3b>(y,x) == Vec3b(255,0,0))
@@ -102,48 +119,46 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
     const auto UP = 2;
     const auto LEFT = 3;
     const auto RIGHT = 4;
-    cout << q.size() << endl;
+
+
+    cout << q1.size() << endl;
     auto cntr = 0;
     Vec4f counter(0,0,0,0);
-    while(!q.empty()) {//sum(visited)[0] != w*h) {
-        while(!q.empty()) {
-            cntr++;
-            auto top = q.front();
-            auto y = std::get<0>(top);
-            auto x = std::get<1>(top);
-            auto p = std::get<2>(top);
-            q.pop();
-            counter[p-1]++;
-            solution.at<uint8_t>(y,x) = p;
-            visited.at<uint8_t>(y,x) = 1;
+    while(!q1.empty()) {//sum(visited)[0] != w*h) {
+        cntr++;
+        auto top = q1.top();
+        auto y = top.y;
+        auto x = top.x;
+        auto p = top.p;
+        auto d = top.dist;
+        q1.pop();
+        counter[p-1]++;
+        solution.at<uint8_t>(y,x) = p;
+        visited.at<uint8_t>(y,x) = 1;
 
-            if(y+1 < h && !visited.at<uint8_t>(y+1,x)) {
-                q2.emplace(y+1,x,DOWN);
-                visited.at<uint8_t>(y+1,x) = 1;
-            }
-            if(x+1 < w && !visited.at<uint8_t>(y,x+1)) {
-                q2.emplace(y,x+1,RIGHT);
-                visited.at<uint8_t>(y,x+1) = 1;
-            }
-            if(y-1 >= 0 && !visited.at<uint8_t>(y-1,x)) {
-                q2.emplace(y-1,x,UP);
-                visited.at<uint8_t>(y-1,x) = 1;
-            }
-            if(x-1 >= 0 && !visited.at<uint8_t>(y,x-1)) {
-                q2.emplace(y,x-1,LEFT);
-                visited.at<uint8_t>(y,x-1) = 1;
-            }
-            if(cntr%10 == 0) {
-                cout << '\r' << ((w*h) - sum(visited)[0])/( (float)total_pix) << endl; 
-                imshow("visited",visited*255);
-                imshow("solution",solution*63);
-                waitKey(1);
-            }
+        if(y+1 < h && !visited.at<uint8_t>(y+1,x)) {
+            q1.push(node(y+1,x,DOWN,d+1));
+            visited.at<uint8_t>(y+1,x) = 1;
         }
-        cout << q.size() << '\t' << q2.size() << endl;
-        cout << counter << endl;
-        std::swap(q,q2);
-
+        if(x+1 < w && !visited.at<uint8_t>(y,x+1)) {
+            q1.push(node(y,x+1,RIGHT,d+1));
+            visited.at<uint8_t>(y,x+1) = 1;
+        }
+        if(y-1 >= 0 && !visited.at<uint8_t>(y-1,x)) {
+            q1.push(node(y-1,x,UP,d+1));
+            visited.at<uint8_t>(y-1,x) = 1;
+        }
+        if(x-1 >= 0 && !visited.at<uint8_t>(y,x-1)) {
+            q1.push(node(y,x-1,LEFT,d+1));
+            visited.at<uint8_t>(y,x-1) = 1;
+        }
+        if(cntr%100 == 0) {
+            cout << '\r' << ((w*h) - sum(visited)[0])/( (float)total_pix) << endl; 
+            imshow("visited",visited*255);
+            imshow("solution",solution*63);
+            waitKey(1);
+        }
+   
     }
     visited = cv::Mat::zeros(input.rows,input.cols,CV_8U);
     for(int y=0; y < h; y++) {
@@ -214,7 +229,7 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
     imshow("paths",paths);
 
     imshow("haha",maze);
-    waitKey(0);
+    waitKey(1);
     return paths;
 }
 void cameraPoseFromHomography(const Mat& H, Mat& pose)
@@ -246,11 +261,11 @@ void cameraPoseFromHomography(const Mat& H, Mat& pose)
 
 int main(int argc, char *argv[])
 {
-    cv::Mat maze = imread("out.png");
-    cv::Mat m2;
-    resize(maze,m2,Size(200,200));
-    auto sol = solveMaze(m2,10);
-    return 0;
+    //cv::Mat maze = imread("out.png");
+    //cv::Mat m2;
+    //resize(maze,m2,Size(200,200));
+    //auto sol = solveMaze(maze);//,10);
+    //return 0;
     redisContext *c;
     redisReply *reply;
     const char *hostname =  "127.0.0.1";
