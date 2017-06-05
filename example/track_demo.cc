@@ -59,7 +59,7 @@ bool operator<(const node& a, const node& b) {
     return a.dist > b.dist;
 }
 
-cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40) 
+cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40, bool diag_path=false) 
 {
     cv::Mat solution = cv::Mat::zeros(input.rows,input.cols,CV_8U);
     cv::Mat paths = cv::Mat::zeros(input.rows,input.cols,CV_32FC3);
@@ -99,8 +99,6 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
     cv::Mat visited = cv::Mat::zeros(input.rows,input.cols,CV_8U);
 
 
-
-
     priority_queue<node> q1;
 
     for(int y=0; y < h; y++) {
@@ -114,16 +112,20 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
                 visited.data[y*w+x] = 1;
         }
     }
-    auto total_pix = (w*h) - sum(visited)[0]; 
-    const auto DOWN = 1;
-    const auto UP = 2;
-    const auto LEFT = 3;
-    const auto RIGHT = 4;
-
+    auto total_pix = (w*h) - sum(visited)[0];
+    enum {
+        DOWN = 1,
+        UP,
+        LEFT,
+        RIGHT,
+        UL,
+        UR,
+        DL,
+        DR,
+    };
 
     cout << q1.size() << endl;
     auto cntr = 0;
-    Vec4f counter(0,0,0,0);
     while(!q1.empty()) {//sum(visited)[0] != w*h) {
         cntr++;
         auto top = q1.top();
@@ -132,7 +134,6 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
         auto p = top.p;
         auto d = top.dist;
         q1.pop();
-        counter[p-1]++;
         solution.at<uint8_t>(y,x) = p;
         visited.at<uint8_t>(y,x) = 1;
 
@@ -152,10 +153,29 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
             q1.push(node(y,x-1,LEFT,d+1));
             visited.at<uint8_t>(y,x-1) = 1;
         }
+        if(diag_path) {
+            if(y+1 < h && x+1 < w && !visited.at<uint8_t>(y+1,x+1)) {
+                q1.push(node(y+1,x+1,DR,d+sqrt(2.0f)));
+                visited.at<uint8_t>(y+1,x+1) = 1;
+            }
+            if(y+1 < h && x-1 >=0 && !visited.at<uint8_t>(y+1,x-1)) {
+                q1.push(node(y+1,x-1,DL,d+sqrt(2.0f)));
+                visited.at<uint8_t>(y+1,x-1) = 1;
+            }
+            if(y-1 >= 0 && x+1 < w && !visited.at<uint8_t>(y-1,x+1)) {
+                q1.push(node(y-1,x+1,UR,d+sqrt(2.0f)));
+                visited.at<uint8_t>(y-1,x+1) = 1;
+            }
+            if(y-1 >= 0 && x-1 >=0 && !visited.at<uint8_t>(y-1,x-1)) {
+                q1.push(node(y-1,x-1,UL,d+sqrt(2.0f)));
+                visited.at<uint8_t>(y-1,x-1) = 1;
+            }
+        }
+        
         if(cntr%100 == 0) {
             cout << '\r' << ((w*h) - sum(visited)[0])/( (float)total_pix) << endl; 
             imshow("visited",visited*255);
-            imshow("solution",solution*63);
+            imshow("solution",solution*(31+(int)(!diag_path)*31));
             waitKey(1);
         }
    
@@ -201,6 +221,22 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
                             end = false;
                             new_pos = make_pair(yn,xn-1);
                             break;
+                        case UL:
+                            end = false;
+                            new_pos = make_pair(yn+1,xn+1);
+                            break;
+                        case UR:
+                            end = false;
+                            new_pos = make_pair(yn+1,xn-1);
+                            break;
+                        case DL:
+                            end = false;
+                            new_pos = make_pair(yn-1,xn+1);
+                            break;
+                        case DR:
+                            end = false;
+                            new_pos = make_pair(yn-1,xn-1);
+                            break;
                     }
                     if(end) {
                         final = new_pos;
@@ -224,12 +260,12 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40)
             }
         }
     }
-    imshow("sol",solution*(255.0/4.0));
+    imshow("solution",solution*(31+(int)(!diag_path)*31));
     imshow("visited",visited*255);
     imshow("paths",paths);
 
     imshow("haha",maze);
-    waitKey(1);
+    waitKey(0);
     return paths;
 }
 void cameraPoseFromHomography(const Mat& H, Mat& pose)
@@ -261,11 +297,14 @@ void cameraPoseFromHomography(const Mat& H, Mat& pose)
 
 int main(int argc, char *argv[])
 {
-    //cv::Mat maze = imread("out.png");
-    //cv::Mat m2;
-    //resize(maze,m2,Size(200,200));
-    //auto sol = solveMaze(maze);//,10);
-    //return 0;
+    //#define TEST_SOLVE
+    #ifdef TEST_SOLVE
+        cv::Mat maze = imread("out.png");
+        cv::Mat m2;
+        //resize(maze,m2,Size(200,200));
+        auto sol = solveMaze(maze);//,10);
+        return 0;
+    #endif
     redisContext *c;
     redisReply *reply;
     const char *hostname =  "127.0.0.1";
@@ -296,6 +335,7 @@ int main(int argc, char *argv[])
     getopt_add_int(getopt, '\0', "bd", "35", "set maze border");
     getopt_add_int(getopt, '\0', "grn", "35", "green difference");
     getopt_add_int(getopt, '\0', "ms", "4", "morph size");
+    getopt_add_int(getopt, '\0', "l2", "0", "use_l2");
 
 
     getopt_add_int(getopt, 't', "threads", "4", "Use this many CPU threads");
@@ -362,6 +402,7 @@ int main(int argc, char *argv[])
     auto grn = getopt_get_int(getopt,"grn");
     auto morph_size = getopt_get_int(getopt,"ms");
 
+    bool l2 = getopt_get_int(getopt,"l2");
 
     reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::th");
     if(reply->type == REDIS_REPLY_STRING) {
@@ -374,6 +415,13 @@ int main(int argc, char *argv[])
     if(reply->type == REDIS_REPLY_STRING) {
         printf("GET foo: %s\n", reply->str);
         tw = atoi(reply->str);
+    }
+    freeReplyObject(reply);
+
+    reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::diag");
+    if(reply->type == REDIS_REPLY_STRING) {
+        printf("GET foo: %s\n", reply->str);
+        l2 = atoi(reply->str);
     }
     freeReplyObject(reply);
 
@@ -587,7 +635,7 @@ int main(int argc, char *argv[])
         if (kp == 'q')
             break;
         if(kp == 's' && num_detect == 4 ) {
-            target = solveMaze(out_image,bd,grn);
+            target = solveMaze(out_image,bd,grn,l2);
         }
 
     }
