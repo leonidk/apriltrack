@@ -68,7 +68,7 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40, bool diag_path=false
     cv::Mat maze = input.clone();
     auto w = maze.cols;
     auto h = maze.rows;
-
+    cout << w << '\t' << h <<endl;
     // segment
     for(int y=0; y < h; y++) {
         for(int x=0; x < w; x++) {
@@ -96,7 +96,7 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40, bool diag_path=false
         for(int x=w-bd; x < w; x++)
                 maze.at<Vec3b>(y,x) = Vec3b(255,0,0);
     // bfs
-    std::queue<std::tuple<int,int,int>> q,q2;
+    std::queue<std::tuple<int,int,int>> q2;
     cv::Mat visited = cv::Mat::zeros(input.rows,input.cols,CV_8U);
 
 
@@ -266,7 +266,7 @@ cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40, bool diag_path=false
     imshow("paths",paths);
 
     imshow("haha",maze);
-    waitKey(0);
+    waitKey(1);
     return paths;
 }
 void cameraPoseFromHomography(const Mat& H, Mat& pose)
@@ -330,8 +330,8 @@ int main(int argc, char *argv[])
     getopt_add_bool(getopt, 'q', "quiet", 0, "Reduce output");
     getopt_add_string(getopt, 'f', "family", "tag36h11", "Tag family to use");
     getopt_add_int(getopt, '\0', "border", "1", "Set tag family border size");
-    getopt_add_int(getopt, '\0', "th", "32", "Set target image height");
-    getopt_add_int(getopt, '\0', "tw", "32", "Set target image width");
+    getopt_add_int(getopt, '\0', "th", "500", "Set target image height");
+    getopt_add_int(getopt, '\0', "tw", "500", "Set target image width");
     getopt_add_int(getopt, '\0', "ct", "80", "set color threshold");
     getopt_add_int(getopt, '\0', "bd", "35", "set maze border");
     getopt_add_int(getopt, '\0', "grn", "35", "green difference");
@@ -410,14 +410,14 @@ int main(int argc, char *argv[])
 
     reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::th");
     if(reply->type == REDIS_REPLY_STRING) {
-        printf("GET foo: %s\n", reply->str);
+        printf("GET foo th: %s\n", reply->str);
         th = atoi(reply->str);
     }
     freeReplyObject(reply);
 
     reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::tw");
     if(reply->type == REDIS_REPLY_STRING) {
-        printf("GET foo: %s\n", reply->str);
+        printf("GET foo tw: %s\n", reply->str);
         tw = atoi(reply->str);
     }
     freeReplyObject(reply);
@@ -428,31 +428,31 @@ int main(int argc, char *argv[])
     while (true) {
         reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::lookahead");
         if(reply->type == REDIS_REPLY_STRING) {
-            printf("GET foo: %s\n", reply->str);
+            printf("GET foo lookahead: %s\n", reply->str);
             lookahead = atoi(reply->str);
         }
         freeReplyObject(reply);
         reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::ct");
         if(reply->type == REDIS_REPLY_STRING) {
-            printf("GET foo: %s\n", reply->str);
+            printf("GET foo ct: %s\n", reply->str);
             ct = atoi(reply->str);
         }
         freeReplyObject(reply);
         reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::bd");
         if(reply->type == REDIS_REPLY_STRING) {
-            printf("GET foo: %s\n", reply->str);
+            printf("GET foo bd: %s\n", reply->str);
             bd = atoi(reply->str);
         }
         freeReplyObject(reply);
         reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::grn");
         if(reply->type == REDIS_REPLY_STRING) {
-            printf("GET foo: %s\n", reply->str);
+            printf("GET foo grn: %s\n", reply->str);
             grn = atoi(reply->str);
         }
         freeReplyObject(reply);
         reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::ms");
         if(reply->type == REDIS_REPLY_STRING) {
-            printf("GET foo: %s\n", reply->str);
+            printf("GET foo ms: %s\n", reply->str);
             morph_size = atoi(reply->str);
         }
         freeReplyObject(reply);
@@ -645,13 +645,13 @@ int main(int argc, char *argv[])
         if(kp == 's' && num_detect == 4 ) {
             reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::diag");
             if(reply->type == REDIS_REPLY_STRING) {
-                printf("GET foo: %s\n", reply->str);
+                printf("GET foo diag: %s\n", reply->str);
                 l2 = atoi(reply->str);
             }
             freeReplyObject(reply);
             reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::segments");
             if(reply->type == REDIS_REPLY_STRING) {
-                printf("GET foo: %s\n", reply->str);
+                printf("GET foo segments: %s\n", reply->str);
                 segments = atoi(reply->str);
             }
             freeReplyObject(reply);
