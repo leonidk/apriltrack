@@ -403,7 +403,7 @@ int main(int argc, char *argv[])
             Mat(src_pts).convertTo(sMat, CV_32FC2);
             Mat(target_pts).convertTo(tMat, CV_32FC2);
             auto T = findHomography(sMat,tMat);
-            warpPerspective(frame,out_image,T,out_image.size());
+            warpPerspective(frame,out_image,T,out_image.size(),INTER_LINEAR,BORDER_CONSTANT,Scalar(255,255,255));
             new_detection = true;
         }
         if(true && zarray_size(detections) == 4) {
@@ -450,7 +450,7 @@ int main(int argc, char *argv[])
             //for(auto & p : out_p)
             //    cout << p << endl;
             target_loc = out_p;
-            warpPerspective(frame,out_image,T,out_image.size());
+            warpPerspective(frame,out_image,T,out_image.size(),INTER_LINEAR,BORDER_CONSTANT,Scalar(255,255,255));
             new_detection = true;
 
         }
