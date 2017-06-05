@@ -336,7 +336,7 @@ int main(int argc, char *argv[])
     getopt_add_int(getopt, '\0', "grn", "35", "green difference");
     getopt_add_int(getopt, '\0', "ms", "4", "morph size");
     getopt_add_int(getopt, '\0', "l2", "0", "use_l2");
-
+    getopt_add_int(getopt, '\0', "lookahead", "0", "look ahead this many steps");
 
     getopt_add_int(getopt, 't', "threads", "4", "Use this many CPU threads");
     getopt_add_double(getopt, 'x', "decimate", "1.0", "Decimate input image by this factor");
@@ -401,6 +401,7 @@ int main(int argc, char *argv[])
     auto bd = getopt_get_int(getopt,"bd");
     auto grn = getopt_get_int(getopt,"grn");
     auto morph_size = getopt_get_int(getopt,"ms");
+    auto lookahead = getopt_get_int(getopt,"lookahead");
 
     bool l2 = getopt_get_int(getopt,"l2");
 
@@ -428,7 +429,12 @@ int main(int argc, char *argv[])
     cv::Mat out_image(th,tw,CV_8UC3);
     cv::Mat target;
     while (true) {
-
+        reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::lookahead");
+        if(reply->type == REDIS_REPLY_STRING) {
+            printf("GET foo: %s\n", reply->str);
+            lookahead = atoi(reply->str);
+        }
+        freeReplyObject(reply);
         reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::ct");
         if(reply->type == REDIS_REPLY_STRING) {
             printf("GET foo: %s\n", reply->str);
@@ -588,8 +594,13 @@ int main(int argc, char *argv[])
                 cout <<  p1 <<"\t" <<  var << endl;
                 if(target.cols) {
                     Point2f p2(m.m10/m.m00, m.m01/m.m00);
-
                     auto tp = target.at<Vec3f>(p2.y,p2.x);
+
+                    for(int t=0; t < lookahead; t++) {
+                        int ny = tp[2]*th;
+                        int nx = tp[1]*tw;
+                        tp = target.at<Vec3f>(ny,nx);
+                    }
                     cout << tp << endl;
                     reply = (redisReply*)redisCommand(c,"SET %s %s", "cs225a::robot::maze::tx", to_string(tp[2]).c_str());
                     freeReplyObject(reply);
