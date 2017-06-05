@@ -302,7 +302,7 @@ int main(int argc, char *argv[])
         cv::Mat maze = imread("out.png");
         cv::Mat m2;
         //resize(maze,m2,Size(200,200));
-        auto sol = solveMaze(maze);//,10);
+        auto sol = solveMaze(maze,35,40,true);//,10);
         return 0;
     #endif
     redisContext *c;
