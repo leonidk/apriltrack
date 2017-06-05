@@ -334,11 +334,11 @@ int main(int argc, char *argv[])
     getopt_add_int(getopt, '\0', "border", "1", "Set tag family border size");
     getopt_add_int(getopt, '\0', "th", "500", "Set target image height");
     getopt_add_int(getopt, '\0', "tw", "500", "Set target image width");
-    getopt_add_int(getopt, '\0', "ct", "80", "set color threshold");
+    getopt_add_int(getopt, '\0', "ct", "120", "set color threshold");
     getopt_add_int(getopt, '\0', "bd", "35", "set maze border");
     getopt_add_int(getopt, '\0', "grn", "30", "green difference");
-    getopt_add_int(getopt, '\0', "ms", "4", "morph size");
-    getopt_add_int(getopt, '\0', "l2", "0", "use_l2");
+    getopt_add_int(getopt, '\0', "ms", "5", "morph size");
+    getopt_add_int(getopt, '\0', "l2", "1", "use_l2");
     getopt_add_int(getopt, '\0', "ballc", "80", "color of ball");
 
     getopt_add_int(getopt, '\0', "lookahead", "0", "look ahead this many steps");
