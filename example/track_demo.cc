@@ -48,7 +48,7 @@ either expressed or implied, of the Regents of The University of Michigan.
 using namespace std;
 using namespace cv;
 
-cv::Mat solveMaze(cv::Mat input) 
+cv::Mat solveMaze(cv::Mat input, int bd = 35, int grn = 40) 
 {
     cv::Mat solution = cv::Mat::zeros(input.rows,input.cols,CV_8U);
     cv::Mat paths = cv::Mat::zeros(input.rows,input.cols,CV_32FC3);
@@ -56,7 +56,7 @@ cv::Mat solveMaze(cv::Mat input)
     cv::Mat maze = input.clone();
     auto w = maze.cols;
     auto h = maze.rows;
-    auto bd = 35;
+
     // segment
     for(int y=0; y < h; y++) {
         for(int x=0; x < w; x++) {
@@ -64,7 +64,7 @@ cv::Mat solveMaze(cv::Mat input)
             if(input.at<Vec3b>(y,x)[2] > input.at<Vec3b>(y,x)[1]
                 && input.at<Vec3b>(y,x)[2] > input.at<Vec3b>(y,x)[0])
                 maze.at<Vec3b>(y,x) = Vec3b(0,0,255);
-            else if( input.at<Vec3b>(y,x)[1] > 40+ input.at<Vec3b>(y,x)[0])
+            else if( input.at<Vec3b>(y,x)[1] > grn + input.at<Vec3b>(y,x)[0])
                 maze.at<Vec3b>(y,x) = Vec3b(0,255,0);
             else
                 maze.at<Vec3b>(y,x) = Vec3b(255,0,0);
@@ -197,7 +197,7 @@ cv::Mat solveMaze(cv::Mat input)
     imshow("paths",paths);
 
     imshow("haha",maze);
-    waitKey();
+    waitKey(1);
     return paths;
 }
 void cameraPoseFromHomography(const Mat& H, Mat& pose)
@@ -257,6 +257,9 @@ int main(int argc, char *argv[])
     getopt_add_int(getopt, '\0', "tw", "500", "Set target image width");
     getopt_add_int(getopt, '\0', "ct", "200", "set color threshold");
     getopt_add_int(getopt, '\0', "bd", "35", "set maze border");
+    getopt_add_int(getopt, '\0', "grn", "40", "green difference");
+    getopt_add_int(getopt, '\0', "ms", "1", "morph size");
+
 
     getopt_add_int(getopt, 't', "threads", "4", "Use this many CPU threads");
     getopt_add_double(getopt, 'x', "decimate", "1.0", "Decimate input image by this factor");
@@ -273,7 +276,7 @@ int main(int argc, char *argv[])
     }
 
     // Initialize camera
-    VideoCapture cap(1);
+    VideoCapture cap(0);
     if (!cap.isOpened()) {
         cerr << "Couldn't open video capture device" << endl;
         return -1;
@@ -313,18 +316,59 @@ int main(int argc, char *argv[])
     Mat undist;
     // have we seen the board? 
     bool initialized = false;
-    float board_width = 0.0f;
-    float board_height = 0.0f;
+
     vector<Vec2f> target_loc;
     auto th = getopt_get_int(getopt,"th");
     auto tw = getopt_get_int(getopt,"tw");    
     auto ct = getopt_get_int(getopt,"ct");
     auto bd = getopt_get_int(getopt,"bd");
+    auto grn = getopt_get_int(getopt,"grn");
+    auto morph_size = getopt_get_int(getopt,"ms");
+
+
+    reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::th");
+    if(reply->type == REDIS_REPLY_STRING) {
+        printf("GET foo: %s\n", reply->str);
+        th = atoi(reply->str);
+    }
+    freeReplyObject(reply);
+
+    reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::tw");
+    if(reply->type == REDIS_REPLY_STRING) {
+        printf("GET foo: %s\n", reply->str);
+        tw = atoi(reply->str);
+    }
+    freeReplyObject(reply);
 
     cv::Mat out_image(th,tw,CV_8UC3);
-    BackgroundSubtractorMOG2 bgs(360,36,false);
     cv::Mat target;
     while (true) {
+
+        reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::ct");
+        if(reply->type == REDIS_REPLY_STRING) {
+            printf("GET foo: %s\n", reply->str);
+            ct = atoi(reply->str);
+        }
+        freeReplyObject(reply);
+        reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::bd");
+        if(reply->type == REDIS_REPLY_STRING) {
+            printf("GET foo: %s\n", reply->str);
+            bd = atoi(reply->str);
+        }
+        freeReplyObject(reply);
+        reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::grn");
+        if(reply->type == REDIS_REPLY_STRING) {
+            printf("GET foo: %s\n", reply->str);
+            grn = atoi(reply->str);
+        }
+        freeReplyObject(reply);
+        reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::ms");
+        if(reply->type == REDIS_REPLY_STRING) {
+            printf("GET foo: %s\n", reply->str);
+            morph_size = atoi(reply->str);
+        }
+        freeReplyObject(reply);
+
         bool new_detection = false;
         cap >> frame;
         cvtColor(frame, gray, COLOR_BGR2GRAY);
@@ -411,7 +455,7 @@ int main(int argc, char *argv[])
 
         }
 
-        redisCommand(c,"SET %s %s", "maze::detections", to_string(num_detect).c_str());
+        reply = (redisReply*)redisCommand(c,"SET %s %s", "cs225a::robot::maze::detections", to_string(num_detect).c_str());
 
         if(num_detect) {
             cv::Mat fg_mask = cv::Mat::zeros(th,tw,CV_8U);
@@ -426,7 +470,7 @@ int main(int argc, char *argv[])
             		}
             	}
             }
-            auto morph_size = 1;
+            //auto morph_size = 1;
 			Mat element = getStructuringElement( 0, Size( 2*morph_size + 1, 2*morph_size+1 ), Point( morph_size, morph_size ) );
 
   		/// Apply the specified morphology operation
@@ -437,19 +481,24 @@ int main(int argc, char *argv[])
             Point2f p1(m.m10/m.m00, m.m01/m.m00);
             Point2f var(sqrt(m.m20/m.m00 - p1.x*p1.x), sqrt(m.m02/m.m00-p1.y*p1.y));
 
-            imshow("hah",out_image);
+            imshow("mapped_image",out_image);
             cv::circle(fg_mask,p1,10,128,3);
-            imshow("hah2",fg_mask);
+            imshow("masked_image",fg_mask);
             var.x /= tw;
             var.y /= th;
             p1.x /= tw;
             p1.y /= th;
             if(m.m00) {
-                redisCommand(c,"SET %s %s", "maze::mass", to_string(m.m00).c_str());
-                redisCommand(c,"SET %s %s", "maze::x", to_string(p1.x).c_str());
-                redisCommand(c,"SET %s %s", "maze::y", to_string(p1.y).c_str());
-                redisCommand(c,"SET %s %s", "maze::stdx", to_string(var.x).c_str());
-                redisCommand(c,"SET %s %s", "maze::stdy", to_string(var.y).c_str());
+                reply = (redisReply*)redisCommand(c,"SET %s %s", "cs225a::robot::maze::mass", to_string(m.m00).c_str());
+                freeReplyObject(reply);
+                reply = (redisReply*)redisCommand(c,"SET %s %s", "cs225a::robot::maze::x", to_string(p1.x).c_str());
+                freeReplyObject(reply);
+                reply = (redisReply*)redisCommand(c,"SET %s %s", "cs225a::robot::maze::y", to_string(p1.y).c_str());
+                freeReplyObject(reply);
+                reply = (redisReply*)redisCommand(c,"SET %s %s", "cs225a::robot::maze::stdx", to_string(var.x).c_str());
+                freeReplyObject(reply);
+                reply = (redisReply*)redisCommand(c,"SET %s %s", "cs225a::robot::maze::stdy", to_string(var.y).c_str());
+                freeReplyObject(reply);
                 //
                 cout <<  p1 <<"\t" <<  var << endl;
                 if(target.cols) {
@@ -457,8 +506,10 @@ int main(int argc, char *argv[])
 
                     auto tp = target.at<Vec3f>(p2.y,p2.x);
                     cout << tp << endl;
-                    redisCommand(c,"SET %s %s", "maze::tx", to_string(tp[2]).c_str());
-                    redisCommand(c,"SET %s %s", "maze::ty", to_string(tp[1]).c_str());
+                    reply = (redisReply*)redisCommand(c,"SET %s %s", "cs225a::robot::maze::tx", to_string(tp[2]).c_str());
+                    freeReplyObject(reply);
+                    reply = (redisReply*)redisCommand(c,"SET %s %s", "cs225a::robot::maze::ty", to_string(tp[1]).c_str());
+                    freeReplyObject(reply);
                 }
             }
 
@@ -499,7 +550,7 @@ int main(int argc, char *argv[])
         if (kp == 'q')
             break;
         if(kp == 's' && num_detect == 4 ) {
-            target = solveMaze(out_image);
+            target = solveMaze(out_image,bd,grn);
         }
 
     }
