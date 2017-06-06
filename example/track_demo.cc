@@ -340,6 +340,8 @@ int main(int argc, char *argv[])
     getopt_add_int(getopt, '\0', "ms", "5", "morph size");
     getopt_add_int(getopt, '\0', "l2", "1", "use_l2");
     getopt_add_int(getopt, '\0', "ballc", "80", "color of ball");
+    getopt_add_int(getopt, '\0', "ctm", "50", "color threshold min");
+
 
     getopt_add_int(getopt, '\0', "lookahead", "0", "look ahead this many steps");
     getopt_add_int(getopt, '\0', "segments", "1", "try to build segment steps");
@@ -410,6 +412,8 @@ int main(int argc, char *argv[])
     auto lookahead = getopt_get_int(getopt,"lookahead");
     auto segments = getopt_get_int(getopt,"segments");
     auto ballc = getopt_get_int(getopt,"ballc");
+    auto ctm = getopt_get_int(getopt,"ctm");
+
 
     bool l2 = getopt_get_int(getopt,"l2");
 
@@ -461,7 +465,12 @@ int main(int argc, char *argv[])
             morph_size = atoi(reply->str);
         }
         freeReplyObject(reply);
-
+        reply = (redisReply*)redisCommand(c,"GET cs225a::robot::maze::ctm");
+        if(reply->type == REDIS_REPLY_STRING) {
+            printf("GET foo ctm: %s\n", reply->str);
+            ctm = atoi(reply->str);
+        }
+        freeReplyObject(reply);
         bool new_detection = false;
         cap >> frame;
         cvtColor(frame, gray, COLOR_BGR2GRAY);
@@ -555,10 +564,12 @@ int main(int argc, char *argv[])
             for(int y=bd; y < th-bd; y++) {
             	for(int x=bd; x < tw-bd; x++) {
             		auto total_color = 0;
+            		uint8_t max_color = 0;
             		for(int c=0; c < 3; c++) {
             			total_color+= out_image.at<Vec3b>(y,x)[c];
+            			max_color = max(max_color,out_image.at<Vec3b>(y,x)[c]);
             		}
-            		if(total_color < ct) {
+            		if(total_color < ct && max_color < ctm) {
             			fg_mask.at<uint8_t>(y,x) = 255;
             		}
             	}
