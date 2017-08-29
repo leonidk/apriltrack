@@ -4,7 +4,7 @@ CC = gcc
 AR = ar
 
 CFLAGS = -std=gnu99 -fPIC -Wall -Wno-unused-parameter -Wno-unused-function
-CFLAGS += -Isrc -O4 -fno-strict-overflow
+CFLAGS += -Isrc -Ofast -fno-strict-overflow
 
 APRILTAG_SRCS := $(shell ls src/*.c src/common/*.c)
 APRILTAG_HEADERS := $(shell ls src/*.h src/common/*.h)

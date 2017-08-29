@@ -528,7 +528,8 @@ int main(int argc, char *argv[])
 
             }
             Mat R,Q,Qx,Qy,Qz;
-            std::vector<Vec2f> target_pts = {{0,0}, {tw,0}, {0,th}, {tw,th}};
+
+            std::vector<Vec2f> target_pts = {{0.0f,0.0f}, {(float)tw,0.0f}, {0.0f,(float)th}, {(float)tw,(float)th}};
             auto T = getPerspectiveTransform(src_pts,target_pts);
             auto angl = RQDecomp3x3(T,R,Q,Qx,Qy,Qz);
             //cout << angl << endl;
